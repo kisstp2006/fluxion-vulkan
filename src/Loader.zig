@@ -37,8 +37,10 @@ const enumerate = @import("enumerate.zig");
 const types = @import("types.zig");
 const version = @import("version.zig");
 
-/// See `library` for the platform names and how they are tried.
-const Library = @import("library.zig").Library;
+/// Finding and opening the library. Not `library`: this file is a struct, and
+/// that is the name of a field on it.
+const finding = @import("library.zig");
+const Library = finding.Library;
 
 const Loader = @This();
 
@@ -52,7 +54,7 @@ getInstanceProcAddr: dispatch.PfnGetInstanceProcAddr,
 /// The commands that exist before there is an instance.
 global: commands.Global,
 
-pub const Error = @import("library.zig").Error || dispatch.Error;
+pub const Error = finding.Error || dispatch.Error;
 
 // -------------------------------------------------------------------------
 // Starting
@@ -65,7 +67,7 @@ pub const Error = @import("library.zig").Error || dispatch.Error;
 /// rather than that the machine has no GPU. It is a thing to report and carry
 /// on from, not a thing to crash on.
 pub fn init() Error!Loader {
-    var lib = try Library.open();
+    var lib = try finding.open();
     errdefer lib.close();
     return fromLibrary(lib);
 }
@@ -73,7 +75,7 @@ pub fn init() Error!Loader {
 /// The same, from one named library rather than the platform's list. For a
 /// loader shipped beside the executable, or one named by a setting.
 pub fn open(path: [:0]const u8) Error!Loader {
-    var lib = try Library.openPath(path);
+    var lib = try finding.openPath(path);
     errdefer lib.close();
     return fromLibrary(lib);
 }
@@ -95,7 +97,7 @@ pub fn adopt(get_instance_proc_addr: dispatch.PfnGetInstanceProcAddr) Error!Load
 
 fn fromLibrary(lib: Library) Error!Loader {
     var owned = lib;
-    const get_instance_proc_addr = try owned.getInstanceProcAddr();
+    const get_instance_proc_addr = try finding.getInstanceProcAddr(&owned);
     return .{
         .library = owned,
         .getInstanceProcAddr = get_instance_proc_addr,

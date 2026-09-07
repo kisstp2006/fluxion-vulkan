@@ -5,7 +5,12 @@
     .version = "0.1.0",
     .minimum_zig_version = "0.16.0",
     .fingerprint = 0x78e62a1771be50f1,
-    .dependencies = .{},
+    .dependencies = .{
+        .fluxion_dyn = .{
+            .url = "git+https://github.com/kisstp2006/fluxion-dyn#ee8018dbc1342f4e3d974ad8173ea45b714f6b1c",
+            .hash = "fluxion_dyn-0.1.0-5Dy8ET1fAQBPUQt2GKvkERCd6yTifeHifjBa5zME-IRo",
+        },
+    },
     .paths = .{
         "build.zig",
         "build.zig.zon",

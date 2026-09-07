@@ -41,6 +41,8 @@
 const std = @import("std");
 const testing = std.testing;
 
+const dyn = @import("fluxion_dyn");
+
 const types = @import("types.zig");
 
 // -------------------------------------------------------------------------
@@ -175,17 +177,15 @@ pub fn loadReport(comptime Table: type, resolver: Resolver, report: *Report) Err
     return table;
 }
 
+/// How a field name becomes a Vulkan command name: `vk`, then the field name
+/// with its first letter capitalised. The same rule `fluxion-gl` applies with
+/// `gl`, which is why it is spelled once, there.
+const naming: dyn.Naming = .{ .prefix = "vk" };
+
 /// The Vulkan name a field resolves to: `vk`, then the field name with its
 /// first letter capitalised.
 pub fn commandName(comptime field_name: []const u8) [:0]const u8 {
-    comptime {
-        if (field_name.len == 0) @compileError("a command table field needs a name");
-        const spelled = "vk" ++
-            [_]u8{std.ascii.toUpper(field_name[0])} ++
-            field_name[1..] ++
-            [_]u8{0};
-        return spelled[0 .. spelled.len - 1 :0];
-    }
+    return dyn.symbolName(field_name, naming);
 }
 
 /// Every command a table asks for, in field order. For printing what a table

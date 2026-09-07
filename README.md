@@ -5,7 +5,7 @@ Zig 0.16.
 
 | Module | What it is |
 | --- | --- |
-| `library` | Finding and opening the platform's Vulkan library, under whichever name it uses, and the one symbol everything else comes from. |
+| `library` | Finding and opening the platform's Vulkan library, under whichever name it uses, and the one symbol everything else comes from. The names are Vulkan's; the opening is [Fluxion Dyn](https://github.com/kisstp2006/fluxion-dyn). |
 | `dispatch` | A struct of function pointers, filled in by name. Three scopes, required and optional commands, and aliases for the promoted ones. |
 | `commands` | The three tables the loader itself needs: global, instance, device. Ordinary structs, with no special status. |
 | `types` | The slice of the Vulkan ABI those tables speak. Handles, result codes, create infos, and the properties a device is chosen by. |
@@ -90,6 +90,10 @@ exe_mod.addImport("fluxion_vulkan", fluxion.module("fluxion_vulkan"));
 ```zig
 const vk = @import("fluxion_vulkan");
 ```
+
+One dependency comes with it, fetched the same way and needing nothing from
+you: [Fluxion Dyn](https://github.com/kisstp2006/fluxion-dyn), which is where
+`library` gets its opening and `dispatch` its command naming.
 
 ## Tour
 

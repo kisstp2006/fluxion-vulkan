@@ -46,13 +46,13 @@ pub fn main(init: std.process.Init) !void {
 fn one(out: *Io.Writer) !void {
     try out.writeAll("\n--- 1. a library opened by hand ---\n");
 
-    var lib = vk.Library.open() catch {
+    var lib = vk.library.open() catch {
         try out.writeAll("no Vulkan library here; nothing to open\n");
         return;
     };
     defer lib.close(); // Ours to close, and last.
 
-    var loader = try vk.Loader.adopt(try lib.getInstanceProcAddr());
+    var loader = try vk.Loader.adopt(try vk.library.getInstanceProcAddr(&lib));
     defer loader.deinit(); // Closes nothing: this loader owns nothing.
 
     try out.print("opened {s}, Vulkan {f}\n", .{ lib.name, try loader.apiVersion() });
