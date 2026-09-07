@@ -15,9 +15,9 @@ Zig 0.16.
 
 Vulkan is never linked against. There is no `libvulkan` on the command line and
 no import library: the loader is found at run time and `vkGetInstanceProcAddr`
-is the only symbol ever looked up by name. Everything else comes out of that one
-function — which is what makes a program that draws nothing on a machine with no
-driver a program that still starts.
+is the only symbol looked up by name. Everything else comes out of that one
+function — which is what makes a program on a machine with no driver a program
+that still starts.
 
 Commands arrive in three tiers, and the difference is not cosmetic:
 
@@ -46,12 +46,10 @@ Everything above `library` is portable, so a `.none` target is not a wall:
 the library never learns where it came from.
 
 **The calling convention is not the same everywhere.** The C headers call it
-`VKAPI_CALL`; it is empty on most platforms, `__stdcall` on Windows, and
-`aapcs-vfp` on 32-bit ARM Android. On 64-bit Windows there is only one
-convention so it makes no difference — on 32-bit x86 Windows it decides who
-cleans the stack, and getting it wrong crashes somewhere unrelated to the
-mistake. `vk.call` is that convention, and every command pointer should be
-declared with it:
+`VKAPI_CALL`: empty on most platforms, `__stdcall` on Windows, `aapcs-vfp` on
+32-bit ARM Android. It makes no difference on 64-bit Windows; on 32-bit x86 it
+decides who cleans the stack, and getting it wrong crashes somewhere unrelated.
+`vk.call` is that convention, and every command pointer should use it:
 
 ```zig
 cmdDraw: *const fn (CommandBuffer, u32, u32, u32, u32) callconv(vk.call) void,

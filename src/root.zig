@@ -20,18 +20,15 @@
 //! there is an instance, what dispatches on an instance, and what dispatches
 //! on a device without going through the loader's trampoline.
 //!
-//! What `dispatch` loads is any struct whose fields are named after commands,
-//! so the tables in `commands` have no special status: declare the commands
-//! your program uses, or hand it a table from a full binding, and it loads the
-//! same way. A field's type says whether the command is required - a plain
-//! function pointer must be found, an optional one may be absent and is left
-//! `null`.
+//! `dispatch` loads any struct whose fields are named after commands, so the
+//! tables in `commands` have no special status. A field's type says whether the
+//! command is required: a plain function pointer must be found, an optional one
+//! may be absent and is left `null`.
 //!
-//! The line this library draws is the door: it gets you a library, an entry
-//! point, a version, the layers and extensions on offer, an instance, the
-//! physical devices, a device, and the tables to reach them through. Past that
-//! is the Vulkan API rather than the loading of it, and that is your binding's
-//! business.
+//! The line this library draws is the door: a library, an entry point, a
+//! version, the layers and extensions on offer, an instance, the physical
+//! devices, a device, and the tables to reach them through. Past that is the
+//! Vulkan API rather than the loading of it.
 //!
 //! Nothing here allocates unless it takes an `Allocator`, and everything that
 //! allocates says who owns the result.

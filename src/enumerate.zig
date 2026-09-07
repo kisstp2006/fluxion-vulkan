@@ -3,11 +3,11 @@
 //! Vulkan's two-call idiom, done once.
 //!
 //! Every Vulkan command that hands back a list is called twice: once with a
-//! null array, which writes the count, and once with an array that size, which
-//! fills it. Between the two the answer can change - a layer is installed, a
-//! GPU is plugged in - and the second call says so by returning `.incomplete`
-//! rather than overrunning the array. Doing that correctly is five lines, and
-//! writing them five times is how the fifth one ends up wrong.
+//! null array to get the count, once with an array that size to fill it.
+//! Between the two the answer can change - a layer installed, a GPU plugged in
+//! - and the second call says so with `.incomplete` rather than overrunning.
+//! Doing it correctly is five lines, and writing them five times is how the
+//! fifth ends up wrong.
 //!
 //! So: one loop, in `collect`, and the six lists a loader needs on top of it.
 //! Each returns memory you own and free.
@@ -179,9 +179,9 @@ pub fn hasLayer(list: []const types.LayerProperties, name: []const u8) bool {
 /// The first name in `wanted` that `list` does not have, or null if it has
 /// them all.
 ///
-/// For the extensions a program cannot run without - failing here, by name,
-/// beats failing inside `vkCreateInstance` with `error.ExtensionNotPresent`
-/// and no indication of which one.
+/// For the extensions a program cannot run without: failing here, by name,
+/// beats `error.ExtensionNotPresent` from `vkCreateInstance` with no
+/// indication of which one.
 ///
 /// ```zig
 /// const required = [_][*:0]const u8{ "VK_KHR_surface", surface_extension };
@@ -204,10 +204,9 @@ pub fn firstMissing(
 /// The entries of `wanted` that `list` actually has, written into `into` and
 /// returned as the prefix that was used.
 ///
-/// For the extensions a program would like but can do without - debug
-/// reporting, portability, a vendor's memory budget query. `into` must have
-/// room for `wanted.len`; the result borrows it, so it has to outlive the
-/// create info it goes into.
+/// For extensions a program would like but can do without. `into` must have
+/// room for `wanted.len`, and the result borrows it, so it has to outlive the
+/// create info.
 ///
 /// ```zig
 /// var buffer: [3][*:0]const u8 = undefined;

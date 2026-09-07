@@ -20,12 +20,10 @@
 //! Nothing here allocates. The two commands that hand back lists take an
 //! allocator of their own and say so.
 //!
-//! **Shutting down, in order.** Every command pointer anywhere - in the global
-//! table, in an instance table, in a device table - points into the library
-//! this holds open. `deinit` closes it, so it goes last: destroy the device,
-//! destroy the instance, and only then `deinit` the loader. A loader built
-//! with `adopt` opens nothing and closes nothing, and the order stops
-//! mattering.
+//! **Shutting down, in order.** Every command pointer anywhere points into the
+//! library this holds open, so `deinit` goes last: destroy the device, destroy
+//! the instance, then `deinit` the loader. A loader built with `adopt` opens
+//! and closes nothing, and the order stops mattering.
 
 const std = @import("std");
 const testing = std.testing;

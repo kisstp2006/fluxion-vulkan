@@ -2,13 +2,11 @@
 
 //! The slice of the Vulkan ABI a loader needs, and nothing beyond it.
 //!
-//! A loader has to speak enough Vulkan to open the door: name the handles,
-//! read a result code, ask what layers and extensions are on offer, create an
-//! instance, look at the physical devices, create a device. That is where the
-//! declarations here stop. Everything past the door - buffers, pipelines,
-//! render passes, the several thousand commands - belongs to whatever binding
-//! you use, and `dispatch` will load a table of its declarations exactly as
-//! happily as one of these.
+//! A loader has to speak enough Vulkan to open the door: name the handles, read
+//! a result code, ask what layers and extensions are on offer, create an
+//! instance, look at the physical devices, create a device. That is where these
+//! declarations stop. Everything past the door belongs to whatever binding you
+//! use, and `dispatch` loads a table of its declarations just as happily.
 //!
 //! Two conveniences the C headers do not have:
 //!
@@ -34,16 +32,15 @@ const testing = std.testing;
 /// expands to nothing and the ordinary C convention applies - but on two it
 /// does not, and both are platforms Vulkan actually runs on:
 ///
-///   * **Windows**: `__stdcall`. On x86-64 and arm64 there is only one calling
-///     convention and it makes no difference. On 32-bit x86 it decides who
-///     cleans the arguments off the stack, and getting it wrong corrupts the
-///     stack on the first call and crashes somewhere later, in a place with
-///     nothing to do with the mistake.
+///   * **Windows**: `__stdcall`. No difference on x86-64 and arm64; on 32-bit
+///     x86 it decides who cleans the arguments off the stack, and getting it
+///     wrong corrupts the stack on the first call and crashes later, somewhere
+///     unrelated.
 ///   * **32-bit ARM Android**: `aapcs-vfp`, the hardfloat convention, whether
-///     or not the application itself was built for it.
+///     or not the application was built for it.
 ///
-/// Every function pointer in this library is declared with it, and so should
-/// every command table of your own be:
+/// Every function pointer here is declared with it, and so should every command
+/// table of your own be:
 ///
 /// ```zig
 /// const Draw = struct {

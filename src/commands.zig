@@ -2,21 +2,18 @@
 
 //! The three tables the loader itself needs, one per scope.
 //!
-//! These are ordinary structs of the kind `dispatch.load` fills in - there is
-//! nothing privileged about them, and a table of your own binding's
-//! declarations loads exactly the same way. What is in them is the setup path
-//! and only the setup path:
+//! Ordinary structs of the kind `dispatch.load` fills in, with nothing
+//! privileged about them. What is in them is the setup path and only that:
 //!
 //!   `Global`    what exists before there is an instance
 //!   `Instance`  creating one, looking at the physical devices, opening one
 //!   `Device`    the three commands that are about the device rather than
 //!               about drawing with it
 //!
-//! `Device` is short on purpose. Once there is a device, the loader's job is
-//! done and Vulkan's begins - the remaining several thousand commands are the
-//! API, not the loading of it. Declare the ones you use in a struct of your
-//! own and hand it to `dispatch.load` with the same device resolver
-//! `Loader.deviceCommands` uses:
+//! `Device` is short on purpose: once there is a device the loader's job is
+//! done, and the remaining several thousand commands are the API rather than
+//! the loading of it. Declare the ones you use and hand them to
+//! `dispatch.load` with the same device resolver:
 //!
 //! ```zig
 //! const Draw = struct {

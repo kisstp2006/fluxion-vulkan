@@ -17,26 +17,20 @@
 //! ```
 //!
 //! The field name is the command name with `vk` in front and the first letter
-//! capitalised, so `cmdDraw` is `vkCmdDraw` and `createSwapchainKHR` is
-//! `vkCreateSwapchainKHR`. Nothing is generated and nothing is registered: the
-//! table is an ordinary struct, and the loading is a comptime walk over its
-//! fields. A table of this library's declarations and a table of a full
-//! binding's load exactly the same way.
+//! capitalised, so `cmdDraw` is `vkCmdDraw`. Nothing is generated: the table is
+//! an ordinary struct and loading is a comptime walk over its fields, so this
+//! library's declarations and a full binding's load exactly alike.
 //!
 //! **The field's type says whether the command is required.** A plain function
-//! pointer must be found or `load` fails. An optional one may be absent, and
-//! is left `null` - which is how a command from a version or an extension you
-//! did not get is meant to be handled, and why `commands.Global` can ask for
-//! `vkEnumerateInstanceVersion` without refusing to run on a Vulkan 1.0
-//! loader.
+//! pointer must be found or `load` fails; an optional one may be absent and is
+//! left `null` - which is why `commands.Global` can ask for
+//! `vkEnumerateInstanceVersion` and still run on a Vulkan 1.0 loader.
 //!
 //! **Three scopes, because Vulkan has three.** A command resolved against an
-//! instance goes through the loader's trampoline, which looks at its first
-//! argument and dispatches to the right driver. A command resolved against a
-//! device skips that: the pointer belongs to one driver and needs no
-//! indirection. On a machine with one GPU the difference is small; it is still
-//! free, and `vkGetDeviceProcAddr` is the reason `commands.Instance` carries
-//! it.
+//! instance goes through the loader's trampoline, which reads its first
+//! argument and picks a driver. One resolved against a device skips that: the
+//! pointer already belongs to one driver. The difference is small on a machine
+//! with one GPU, but it is free.
 
 const std = @import("std");
 const testing = std.testing;
