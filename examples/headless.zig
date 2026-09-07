@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: CC0-1.0
+// SPDX-License-Identifier: BSL-1.0
 
 //! The smallest complete Vulkan program. Run it with
 //! `zig build example-headless`.

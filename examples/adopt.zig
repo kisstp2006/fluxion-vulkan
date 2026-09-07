@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: CC0-1.0
+// SPDX-License-Identifier: BSL-1.0
 
 //! Vulkan you did not open yourself. Run it with `zig build example-adopt`.
 //!

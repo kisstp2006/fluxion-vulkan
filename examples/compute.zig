@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: CC0-1.0
+// SPDX-License-Identifier: BSL-1.0
 
 //! GPU compute, end to end. Run it with `zig build example-compute`.
 //!

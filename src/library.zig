@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: CC0-1.0
+// SPDX-License-Identifier: BSL-1.0
 
 //! Finding the Vulkan library on this machine, and getting one symbol out of
 //! it.

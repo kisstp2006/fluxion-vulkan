@@ -473,7 +473,16 @@ Zig 0.16.0. No system headers, no `vulkan-headers`, and nothing to link.
 
 ## License
 
-`SPDX-License-Identifier: CC0-1.0`
 
-[CC0 1.0 Universal](LICENSE) — public domain dedication. Do whatever you like
-with this, no attribution required.
+`SPDX-License-Identifier: BSL-1.0`
+
+[Boost Software License 1.0](LICENSE) - permissive, and short enough to read
+in a minute: use it, change it, ship it, in anything. The one obligation is
+that the copyright notice and the licence text travel with the *source*; a
+binary built from it carries nothing, which is the difference from MIT and
+BSD and the reason this is the usual choice for a library that ends up
+compiled into somebody else's program.
+
+Fluxion libraries are licensed by layer: the foundation is CC0, the engine
+infrastructure this one belongs to is BSL-1.0, and what builds on top of it
+is BSD.

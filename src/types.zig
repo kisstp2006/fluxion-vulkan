@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: CC0-1.0
+// SPDX-License-Identifier: BSL-1.0
 
 //! The slice of the Vulkan ABI a loader needs, and nothing beyond it.
 //!

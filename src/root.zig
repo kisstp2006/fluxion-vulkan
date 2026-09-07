@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: CC0-1.0
+// SPDX-License-Identifier: BSL-1.0
 
 //! Fluxion Vulkan - finding Vulkan at run time, and turning its names into
 //! function pointers.
