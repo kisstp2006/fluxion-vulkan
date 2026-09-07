@@ -7,8 +7,8 @@
     .fingerprint = 0x78e62a1771be50f1,
     .dependencies = .{
         .fluxion_dyn = .{
-            .url = "git+https://github.com/kisstp2006/fluxion-dyn#ee8018dbc1342f4e3d974ad8173ea45b714f6b1c",
-            .hash = "fluxion_dyn-0.1.0-5Dy8ET1fAQBPUQt2GKvkERCd6yTifeHifjBa5zME-IRo",
+            .url = "git+https://github.com/kisstp2006/fluxion-dyn#27e7ba0dffff86887801afc7d312bfcdaff1c54f",
+            .hash = "fluxion_dyn-0.1.0-5Dy8EU9PAQAp7cuNi6RU8eu0pgcFXWUbrBq69b7idVnA",
         },
     },
     .paths = .{
