@@ -3,12 +3,14 @@
 //! Fluxion Vulkan - finding Vulkan at run time, and turning its names into
 //! function pointers.
 //!
-//! Six pieces:
+//! Seven pieces:
 //!
 //!   `library`    finding and opening the platform's Vulkan library
 //!   `dispatch`   a struct of function pointers, filled in by name
 //!   `commands`   the three tables the loader itself needs
 //!   `types`      the slice of the Vulkan ABI those tables speak
+//!   `gen`        the rest of it - every struct, enum, flag and command a
+//!                renderer's backend needs - generated from the registry
 //!   `enumerate`  Vulkan's two-call idiom, done once
 //!   `version`    the packed `u32` a Vulkan version travels in
 //!
@@ -25,10 +27,12 @@
 //! command is required: a plain function pointer must be found, an optional one
 //! may be absent and is left `null`.
 //!
-//! The line this library draws is the door: a library, an entry point, a
-//! version, the layers and extensions on offer, an instance, the physical
+//! The line the hand-written part draws is the door: a library, an entry point,
+//! a version, the layers and extensions on offer, an instance, the physical
 //! devices, a device, and the tables to reach them through. Past that is the
-//! Vulkan API rather than the loading of it.
+//! Vulkan API rather than the loading of it, and that is `gen`: written by
+//! `tools/genvk.zig` from the registry and `tools/wanted.zon`, checked against
+//! the real headers, and never edited.
 //!
 //! Nothing here allocates unless it takes an `Allocator`, and everything that
 //! allocates says who owns the result.
@@ -42,6 +46,16 @@ pub const enumerate = @import("enumerate.zig");
 pub const library = @import("library.zig");
 pub const types = @import("types.zig");
 pub const version = @import("version.zig");
+
+/// The rest of Vulkan: every struct, enum and command a backend needs,
+/// generated from the registry. `gen.types` and `gen.commands` are the ABI,
+/// and share their handles and structs with the declarations above - a
+/// `vk.Device` and a `vk.gen.types.Device` are one type. `tools/wanted.zon`
+/// says what is in them.
+pub const gen = struct {
+    pub const types = @import("gen/types.zig");
+    pub const commands = @import("gen/commands.zig");
+};
 
 /// The library, the entry point and the global commands, in one place. See
 /// `Loader`.
@@ -123,6 +137,18 @@ pub const MemoryPropertyFlags = types.MemoryPropertyFlags;
 // Shorthands
 // -------------------------------------------------------------------------
 
+/// Where a device's commands are resolved, given the instance table that has
+/// `getDeviceProcAddr` - this library's `InstanceCommands` or the generated
+/// `gen.commands.Instance`, which spell that command's first argument slightly
+/// differently and mean the same thing. See `dispatch.Resolver`.
+///
+/// ```zig
+/// const dev = try vk.load(vk.gen.commands.Device, vk.deviceResolver(inst, device));
+/// ```
+pub fn deviceResolver(instance_commands: anytype, device: Device) Resolver {
+    return .{ .device = .{ .get = @ptrCast(instance_commands.getDeviceProcAddr), .handle = device } };
+}
+
 /// Fill in a table of command declarations. See `dispatch.load`.
 ///
 /// ```zig
@@ -150,6 +176,8 @@ pub const queueFamily = enumerate.queueFamily;
 // -------------------------------------------------------------------------
 
 const stub = @import("stub.zig");
+const oracle = @import("oracle.zig");
+const real = @import("real.zig");
 
 test {
     // Pull each module in so `zig build test` runs its tests too.
@@ -161,6 +189,8 @@ test {
     _ = version;
     _ = Loader;
     _ = stub;
+    _ = oracle;
+    _ = real;
 }
 
 test "the whole path, against a Vulkan that is not there" {
@@ -424,4 +454,30 @@ test "the real Vulkan, when this machine has one" {
         const anything: u32 = @bitCast(families[0].queue_flags);
         try testing.expect(anything != 0);
     }
+}
+
+/// Refer to everything a type declares, and to everything those declare.
+/// Declarations nobody uses are never analysed, and a generated file is mostly
+/// declarations nobody uses yet.
+fn analyse(comptime T: type) void {
+    switch (@typeInfo(T)) {
+        inline .@"struct", .@"enum", .@"union", .@"opaque" => |info| {
+            inline for (info.decls) |decl| {
+                const value = @field(T, decl.name);
+                if (@TypeOf(value) == type) {
+                    analyse(value);
+                } else if (@typeInfo(@TypeOf(value)) == .@"fn") {
+                    // A function is only analysed when something could call it.
+                    std.mem.doNotOptimizeAway(&value);
+                }
+            }
+        },
+        else => {},
+    }
+}
+
+test "everything generated compiles" {
+    // The check that the generator writes Zig, and not just text.
+    analyse(gen.types);
+    analyse(gen.commands);
 }

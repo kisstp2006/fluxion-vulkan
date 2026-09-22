@@ -15,6 +15,16 @@
 //! driver without `vkGetPhysicalDeviceProperties2` under its core name, an
 //! instance that refuses to be created.
 //!
+//! **What it covers of the generated tables.** With `serve_generated` on, it
+//! also *names* every command `gen/commands.zig` asks for - so that the three
+//! generated tables load through it, and `loadReport` can be asked what a load
+//! found and what it did not - but it *implements* only what the tests above
+//! need, plus `vkGetPhysicalDeviceFormatProperties` and
+//! `vkGetPhysicalDeviceImageFormatProperties`. The rest resolves to
+//! `unimplemented`, which stops the test with a message if anything calls it.
+//! Drawing, memory, pipelines and swapchains are not covered here at all: they
+//! are covered on the real driver, in `real.zig`.
+//!
 //! Nothing here is exported from `root.zig`, and none of it is thread-safe.
 
 const std = @import("std");
@@ -22,6 +32,8 @@ const testing = std.testing;
 
 const commands = @import("commands.zig");
 const dispatch = @import("dispatch.zig");
+const generated = @import("gen/commands.zig");
+const full = @import("gen/types.zig");
 const enumerate = @import("enumerate.zig");
 const types = @import("types.zig");
 const version = @import("version.zig");
@@ -42,11 +54,29 @@ pub var no_properties2 = false;
 /// What the next `vkCreateInstance` returns instead of succeeding.
 pub var instance_failure: ?types.Result = null;
 
+/// Also answer every name the generated command tables ask for: implemented
+/// where the stub has an implementation, `unimplemented` where it has none, and
+/// nothing for the commands of extensions the stub does not advertise.
+pub var serve_generated = false;
+
 pub fn reset() void {
     pretend_1_0 = false;
     no_properties2 = false;
     instance_failure = null;
+    serve_generated = false;
 }
+
+/// The commands of the window systems this Vulkan has not got. A real driver
+/// without `VK_KHR_xlib_surface` answers null for these, and so does the stub.
+pub const not_advertised = [_][]const u8{
+    "vkCreateXlibSurfaceKHR",
+    "vkGetPhysicalDeviceXlibPresentationSupportKHR",
+    "vkCreateXcbSurfaceKHR",
+    "vkGetPhysicalDeviceXcbPresentationSupportKHR",
+    "vkCreateWaylandSurfaceKHR",
+    "vkGetPhysicalDeviceWaylandPresentationSupportKHR",
+    "vkCreateAndroidSurfaceKHR",
+};
 
 // -------------------------------------------------------------------------
 // What this Vulkan has
@@ -164,10 +194,34 @@ fn instanceProcAddr(
     if (is(wanted, "vkGetPhysicalDeviceProperties2KHR"))
         return if (no_properties2) null else @ptrCast(&getPhysicalDeviceProperties2);
 
+    if (is(wanted, "vkGetPhysicalDeviceFormatProperties"))
+        return @ptrCast(&getPhysicalDeviceFormatProperties);
+    if (is(wanted, "vkGetPhysicalDeviceImageFormatProperties"))
+        return @ptrCast(&getPhysicalDeviceImageFormatProperties);
+
+    if (serve_generated and !pretend_1_0 and servedByGenerated(generated.Instance, wanted))
+        return @ptrCast(&unimplemented);
+
     // A real loader also answers device-level names here, through a
     // trampoline. This one does too, so that the difference between the two
     // tables is about where the pointer comes from and not about what exists.
     return deviceProcAddr(null, name);
+}
+
+/// Is `name` one the generated `Table` asks for, and one this Vulkan has?
+fn servedByGenerated(comptime Table: type, name: []const u8) bool {
+    for (not_advertised) |hidden| if (std.mem.eql(u8, hidden, name)) return false;
+    inline for (comptime dispatch.names(Table)) |candidate| {
+        if (std.mem.eql(u8, candidate, name)) return true;
+    }
+    return false;
+}
+
+/// What a command the stub names and does not implement resolves to. It has no
+/// signature because it is never meant to return: calling one is a test that
+/// has strayed outside what the stub is for.
+fn unimplemented() callconv(types.call) noreturn {
+    @panic("the stub names this command and does not implement it");
 }
 
 fn deviceProcAddr(
@@ -179,6 +233,7 @@ fn deviceProcAddr(
     if (std.mem.eql(u8, wanted, "vkDestroyDevice")) return @ptrCast(&destroyDevice);
     if (std.mem.eql(u8, wanted, "vkGetDeviceQueue")) return @ptrCast(&getDeviceQueue);
     if (std.mem.eql(u8, wanted, "vkDeviceWaitIdle")) return @ptrCast(&deviceWaitIdle);
+    if (serve_generated and servedByGenerated(generated.Device, wanted)) return @ptrCast(&unimplemented);
     return null;
 }
 
@@ -278,6 +333,37 @@ fn getPhysicalDeviceProperties2(
     properties: *types.PhysicalDeviceProperties2,
 ) callconv(types.call) void {
     getPhysicalDeviceProperties(physical_device, &properties.properties);
+}
+
+/// Nothing is supported on either invented GPU beyond what the memory and
+/// queue queries say, and a format query that says so is a legal answer.
+fn getPhysicalDeviceFormatProperties(
+    physical_device: types.PhysicalDevice,
+    format: full.Format,
+    properties: *full.FormatProperties,
+) callconv(types.call) void {
+    _ = physical_device;
+    _ = format;
+    properties.* = std.mem.zeroes(full.FormatProperties);
+}
+
+fn getPhysicalDeviceImageFormatProperties(
+    physical_device: types.PhysicalDevice,
+    format: full.Format,
+    image_type: full.ImageType,
+    tiling: full.ImageTiling,
+    usage: full.ImageUsageFlags,
+    flags: full.ImageCreateFlags,
+    properties: *full.ImageFormatProperties,
+) callconv(types.call) types.Result {
+    _ = physical_device;
+    _ = format;
+    _ = image_type;
+    _ = tiling;
+    _ = usage;
+    _ = flags;
+    properties.* = std.mem.zeroes(full.ImageFormatProperties);
+    return .error_format_not_supported;
 }
 
 fn getPhysicalDeviceFeatures(
@@ -502,4 +588,56 @@ test "the physical device handles come apart again" {
         try testing.expectEqual(i, indexOf(physicalDevice(i)));
     }
     try testing.expect(physicalDevice(0) != physicalDevice(1));
+}
+
+test "the generated tables load through the stub, and say what they did not find" {
+    reset();
+    serve_generated = true;
+    defer reset();
+
+    // Global: all four, the 1.1 one included.
+    var report: dispatch.Report = .{};
+    const global = try dispatch.loadReport(generated.Global, .{ .global = getInstanceProcAddr }, &report);
+    try testing.expectEqual(comptime dispatch.names(generated.Global).len, report.found);
+    try testing.expect(global.enumerateInstanceVersion != null);
+
+    // Instance: every required command, and every optional one but the
+    // platforms this Vulkan has no window system for.
+    const instance = theInstance();
+    const inst = try dispatch.loadReport(generated.Instance, .{ .instance = .{ .get = getInstanceProcAddr, .handle = instance } }, &report);
+    try testing.expectEqual(not_advertised.len, report.absent);
+    try testing.expectEqual(comptime dispatch.names(generated.Instance).len - not_advertised.len, report.found);
+    try testing.expect(inst.createXlibSurfaceKHR == null);
+    try testing.expect(inst.createWin32SurfaceKHR != null);
+
+    // The two the stub implements for the generated table, through it.
+    var format: full.FormatProperties = undefined;
+    inst.getPhysicalDeviceFormatProperties(physicalDevice(0), .r8g8b8a8_unorm, &format);
+    try testing.expectEqual(@as(u32, 0), @as(u32, @bitCast(format.optimal_tiling_features)));
+
+    var image_format: full.ImageFormatProperties = undefined;
+    try testing.expectEqual(
+        types.Result.error_format_not_supported,
+        inst.getPhysicalDeviceImageFormatProperties(physicalDevice(0), .r8g8b8a8_unorm, .@"2d", .optimal, .{ .sampled = true }, .{}, &image_format),
+    );
+
+    // Device: every name the table asks for, resolved without a trampoline.
+    const get_device_proc_addr: dispatch.PfnGetDeviceProcAddr = @ptrCast(inst.getDeviceProcAddr);
+    _ = try dispatch.loadReport(generated.Device, .{ .device = .{ .get = get_device_proc_addr, .handle = theDevice() } }, &report);
+    try testing.expectEqual(comptime dispatch.names(generated.Device).len, report.found);
+    try testing.expectEqual(@as(usize, 0), report.absent);
+}
+
+test "an older Vulkan hides the generated commands it would not have" {
+    reset();
+    serve_generated = true;
+    pretend_1_0 = true;
+    defer reset();
+
+    // A 1.0 loader has no version command: the generated table says so by
+    // leaving it null, as the hand-written one does.
+    var report: dispatch.Report = .{};
+    const global = try dispatch.loadReport(generated.Global, .{ .global = getInstanceProcAddr }, &report);
+    try testing.expect(global.enumerateInstanceVersion == null);
+    try testing.expectEqual(@as(usize, 1), report.absent);
 }

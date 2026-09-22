@@ -24,6 +24,10 @@
 //! const draw = try dispatch.load(Draw, loader.deviceResolver(instance_cmds, device));
 //! ```
 //!
+//! Or take the ones that are already declared: `gen/commands.zig` has the same
+//! three scopes for a renderer's worth of Vulkan, generated from the registry,
+//! and it loads through the same resolvers.
+//!
 //! Commands that may not be there are declared optional, so a table loads on
 //! an older loader or an older driver and says what it did not get rather than
 //! failing.

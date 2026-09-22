@@ -17,9 +17,10 @@
 //! ```
 //!
 //! The field name is the command name with `vk` in front and the first letter
-//! capitalised, so `cmdDraw` is `vkCmdDraw`. Nothing is generated: the table is
-//! an ordinary struct and loading is a comptime walk over its fields, so this
-//! library's declarations and a full binding's load exactly alike.
+//! capitalised, so `cmdDraw` is `vkCmdDraw`. Nothing is registered: the table is
+//! an ordinary struct and loading is a comptime walk over its fields, so a table
+//! you wrote, this library's own, and the generated ones in `gen/commands.zig`
+//! all load exactly alike.
 //!
 //! **The field's type says whether the command is required.** A plain function
 //! pointer must be found or `load` fails; an optional one may be absent and is

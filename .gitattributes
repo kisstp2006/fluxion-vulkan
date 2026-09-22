@@ -2,3 +2,9 @@
 # core.autocrlf=true would otherwise hand a fresh Windows clone CRLF files.
 *.zig text eol=lf
 *.zon text eol=lf
+# The generated C is compared byte for byte with what the generator writes, and
+# the shaders are GLSL that `glslc` turns into the .spv beside them.
+*.c text eol=lf
+*.vert text eol=lf
+*.frag text eol=lf
+*.spv binary

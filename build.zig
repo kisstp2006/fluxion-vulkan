@@ -42,14 +42,58 @@ pub fn build(b: *std.Build) void {
         },
     });
 
+    // The generator: `tools/genvk.zig` reads the registry and `tools/wanted.zon`
+    // and writes `src/gen/`. It runs on the machine building, whatever the
+    // target is, and it is not part of `zig build` or `zig build test`: what it
+    // writes is committed, so nobody who only uses this library needs `vk.xml`.
+    const genvk_mod = b.createModule(.{
+        .root_source_file = b.path("tools/genvk.zig"),
+        .target = b.resolveTargetQuery(.{}),
+        .optimize = .Debug,
+    });
+    const genvk = b.addExecutable(.{ .name = "genvk", .root_module = genvk_mod });
+
+    // zig build gen -Dvk-xml=<path>: regenerate. zig build gen-check: say whether
+    // what is committed is what the generator writes now.
+    const vk_xml = b.option([]const u8, "vk-xml", "Path to the Vulkan registry, vk.xml, for `zig build gen`");
+    const gen_step = b.step("gen", "Regenerate src/gen from vk.xml and tools/wanted.zon (needs -Dvk-xml=<path>)");
+    const gen_check_step = b.step("gen-check", "Fail if src/gen is not what the generator writes from vk.xml (needs -Dvk-xml=<path>)");
+    if (vk_xml) |xml_path| {
+        const write = b.addRunArtifact(genvk);
+        write.addArgs(&.{ xml_path, "tools/wanted.zon", "src/gen" });
+        write.setCwd(b.path("."));
+        gen_step.dependOn(&write.step);
+
+        const check = b.addRunArtifact(genvk);
+        check.addArgs(&.{ xml_path, "tools/wanted.zon", "src/gen", "--check" });
+        check.setCwd(b.path("."));
+        gen_check_step.dependOn(&check.step);
+    } else {
+        const missing = "the generator needs the registry: pass -Dvk-xml=<path to vk.xml>";
+        gen_step.dependOn(&b.addFail(missing).step);
+        gen_check_step.dependOn(&b.addFail(missing).step);
+    }
+
     // zig build test
     const tests = b.addTest(.{
         .name = "fluxion-vulkan-tests",
         .root_module = mod,
     });
     const run_tests = b.addRunArtifact(tests);
+    // The layout oracle compiles C with this compiler, and writes its scratch
+    // files under the cache directory of wherever it is run from.
+    run_tests.setEnvironmentVariable("FLUXION_ZIG", b.graph.zig_exe);
+    run_tests.setCwd(b.path("."));
     const test_step = b.step("test", "Run the library test suite");
     test_step.dependOn(&run_tests.step);
+
+    // The generator's own tests: the XML reader, the names, and - when it is
+    // given the registry - that what is committed is what it writes.
+    const tool_tests = b.addTest(.{ .name = "genvk-tests", .root_module = genvk_mod });
+    const run_tool_tests = b.addRunArtifact(tool_tests);
+    run_tool_tests.setCwd(b.path("."));
+    if (vk_xml) |xml_path| run_tool_tests.setEnvironmentVariable("FLUXION_VK_XML", xml_path);
+    test_step.dependOn(&run_tool_tests.step);
 
     // zig build example, zig build example-<name>, zig build examples
     const all_examples = b.step("examples", "Build every example without running one");

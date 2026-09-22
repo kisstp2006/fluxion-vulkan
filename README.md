@@ -9,6 +9,7 @@ Zig 0.16.
 | `dispatch` | A struct of function pointers, filled in by name. Three scopes, required and optional commands, and aliases for the promoted ones. |
 | `commands` | The three tables the loader itself needs: global, instance, device. Ordinary structs, with no special status. |
 | `types` | The slice of the Vulkan ABI those tables speak. Handles, result codes, create infos, and the properties a device is chosen by. |
+| `gen` | The rest of Vulkan: every struct, enum, flag and command a renderer's backend needs, **generated from the registry** — `gen.types` and `gen.commands`. |
 | `enumerate` | Vulkan's two-call idiom, done once — and the two questions anyone asks of a list of extension names. |
 | `version` | The packed `u32` a Vulkan version travels in, and the vendor packings a driver version does not. |
 | `Loader` | The first five in the order you use them. |
@@ -173,10 +174,10 @@ const draw = try vk.load(Draw, inst.deviceResolver(device));
 
 The field name is the command name with `vk` in front and the first letter
 capitalised, so `cmdDraw` is `vkCmdDraw` and `createSwapchainKHR` is
-`vkCreateSwapchainKHR`. Nothing is generated and nothing is registered: the
-table is an ordinary struct, and the loading is a comptime walk over its fields.
-A table of this library's declarations and a table of a full binding's load
-identically.
+`vkCreateSwapchainKHR`. Nothing is registered: the table is an ordinary struct,
+and the loading is a comptime walk over its fields. A table you wrote, one of
+this library's, and one of [the generated ones](#the-rest-of-vulkan-generated-from-the-registry)
+load identically.
 
 **The field's type says whether the command is required.** A plain function
 pointer must be found or the load fails. An optional one may be absent and is
@@ -228,13 +229,16 @@ defer dev.destroyDevice(device, null);
 ```
 
 `commands.Device` has three commands in it, on purpose. Once there is a device
-the loader's job is done and Vulkan's begins — the remaining several thousand
-commands are the API, not the loading of it. Declare the ones you use and hand
-them to the same resolver:
+the loader's job is done and Vulkan's begins — the remaining commands are the
+API, not the loading of it. Declare the ones you use and hand them to the same
+resolver:
 
 ```zig
 const mine = try vk.load(MyCommands, inst.deviceResolver(device));
 ```
+
+Or take the ones somebody has already declared: the same three scopes for a
+whole renderer's worth of Vulkan are [`gen.commands`](#the-rest-of-vulkan-generated-from-the-registry).
 
 ### enumerate
 
@@ -301,8 +305,8 @@ var info: vk.InstanceCreateInfo = .{ .application_info = &app };
 info.setExtensions(enabled);
 ```
 
-Handles are distinct opaque pointer types, so a `Device` will not go where an
-`Instance` was meant. Result codes are an open enum, and `check` divides them
+Handles are distinct types, so a `Device` will not go where an `Instance` was
+meant. Result codes are an open enum, and `check` divides them
 the way Vulkan does — negative is a failure, and a success comes back rather
 than being thrown away, because `incomplete` and `suboptimal_khr` are successes
 that mean you have something else to do:
@@ -315,6 +319,11 @@ if (result == .incomplete) {} // there were more than the buffer could hold
 The structs the driver writes into — properties, limits, memory heaps — are
 pinned to their C sizes by a test, because a declaration one field short is a
 buffer overflow that no test of behaviour would catch.
+
+These are not a second copy of the ABI. `types` re-exports the generated
+declarations under the names this library has always used, so a `vk.Device` and
+a `vk.gen.types.Device` are one type, and what is written by hand in `types` is
+what the registry cannot say: the calling convention, and the documentation.
 
 ### version
 
@@ -340,6 +349,152 @@ hardware:
 const driver: vk.version.Driver = .{ .vendor_id = props.vendor_id, .value = props.driver_version };
 std.debug.print("{f}\n", .{driver});   // 595.95.0.0, not 4:83.380.0
 ```
+
+## The rest of Vulkan, generated from the registry
+
+The tour above stops at the door. Past it is a renderer's worth of Vulkan — a
+couple of hundred commands and a hundred and thirty structs — and that is
+`vk.gen`:
+
+```zig
+const t = vk.gen.types;
+const c = vk.gen.commands;
+
+const inst = try vk.load(c.Instance, loader.instanceResolver(instance));
+const dev = try vk.load(c.Device, vk.deviceResolver(inst, device));
+
+var buffer: t.Buffer = .none;
+const info: t.BufferCreateInfo = .{
+    .size = 256,
+    .usage = .{ .transfer_src = true, .transfer_dst = true },
+    .sharing_mode = .exclusive,
+};
+_ = try dev.createBuffer(device, &info, null, &buffer).check();
+defer dev.destroyBuffer(device, buffer, null);
+```
+
+**None of it is written by hand.** A wrong field order, a wrong `sType` or a
+wrong enum value is silent until a driver crashes, and the registry — `vk.xml` —
+is the data that defines all of it. So `tools/genvk.zig` reads the registry and
+writes `src/gen/`, and a data file, `tools/wanted.zon`, says what is wanted:
+
+```zig
+.{
+    .versions = .{ "VK_VERSION_1_0", "VK_VERSION_1_1", "VK_VERSION_1_2", "VK_VERSION_1_3" },
+    .baseline = "VK_VERSION_1_0",
+    .extensions = .{ "VK_KHR_surface", "VK_KHR_swapchain", "VK_EXT_debug_utils", ... },
+
+    .global = .{ "vkCreateInstance", ... },
+    .instance = .{ "vkGetPhysicalDeviceProperties", "vkGetPhysicalDeviceProperties2", ... },
+    .device = .{ "vkCreateBuffer", "vkCmdDraw", "vkCmdBeginRendering", ... },
+
+    .structs = .{ "VkPipelineRenderingCreateInfo", ... },   // what no command mentions
+}
+```
+
+The generator contains no list of Vulkan's commands, structs or enums - only the
+registry's own conventions. To add a command, put it in the tier it
+belongs to and run it again; what the command needs — its structs, their enums
+and flags, the handles and function pointers inside them — comes with it, to the
+end. The registry is an input and not part of this repository:
+
+```
+zig build gen -Dvk-xml=<path to vk.xml>      write src/gen
+zig build gen-check -Dvk-xml=<path to vk.xml>   fail if src/gen is not what the generator writes
+```
+
+`src/gen` is committed, and `zig build` and `zig build test` never read `vk.xml`.
+The output is deterministic — registry order, whatever the order of the wanted
+list — and each file says which `VK_HEADER_VERSION` it came from: **350**, the
+Vulkan SDK 1.4.350.0.
+
+| File | What is in it |
+| --- | --- |
+| `gen/types.zig` | Handles, enums, flags, structs, function pointer types and constants. 130 structs, 2 unions, 39 enums, 54 flag types, 28 handles, 1,194 enumerants. |
+| `gen/commands.zig` | `Global`, `Instance` and `Device`: 4, 33 and 135 commands, 42 of them optional. |
+| `gen/layout.zig`, `gen/layout.c` | What Zig and what the real C headers make of every struct and enumerant. See the oracle, below. |
+
+### Vulkan 1.0 is the baseline
+
+A backend that runs on old drivers and on phones cannot assume a command exists
+because a newer Vulkan has it. So a command of the 1.0 core is a plain function
+pointer in the tables — a device without it is not a Vulkan device — and **every
+other command is optional**, `?*const fn`, and left `null` where the driver has
+neither the version nor the extension. That is `cmdBeginRendering` and
+`cmdEndRendering` (1.3, or `VK_KHR_dynamic_rendering`), `cmdPipelineBarrier2` and
+`queueSubmit2`, `getPhysicalDeviceProperties2` and `getPhysicalDeviceFeatures2`,
+`getBufferMemoryRequirements2` — but also the surface and swapchain commands,
+the five platforms' surface creators, and the debug utils, because those exist
+only where an extension was enabled. A promoted command answers to its old name
+too: the table's `aliases` say so, and `dispatch` tries both.
+
+### What it looks like
+
+The conventions are the ones `types` already had, written down:
+
+| The registry | Here |
+| --- | --- |
+| `VkSwapchainKHR`, `PFN_vkAllocationFunction` | `SwapchainKHR`, `PfnAllocationFunction`: `Vk` off, the vendor tag kept. |
+| `pNext`, `sType`, `ppEnabledLayerNames` | `next`, `s_type`, `enabled_layer_names`: `snake_case`, and the Hungarian prefix off. |
+| `vkCmdDraw`, `vkCreateSwapchainKHR` | `cmdDraw`, `createSwapchainKHR`. |
+| `VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL` | `.transfer_src_optimal`: an open `enum(i32)`. A name that starts with a digit is quoted: `.@"2d"`. |
+| `VK_QUEUE_GRAPHICS_BIT` | `QueueFlags{ .graphics = true }`: a `packed struct(u32)` — `u64` for the `…Flags2` types — with a `contains`. A combination such as `VK_SHADER_STAGE_ALL_GRAPHICS` is a constant on it. |
+| `VkBuffer`, `VkDevice` | `Buffer` is `enum(u64) { none = 0, _ }` on every platform, 32-bit ones too, and `@intFromEnum` gets the number a debug label wants. `Device` is `*opaque {}`. |
+| `const char*`, `const VkX*` and a count | `[*:0]const u8` and `[*]const X`, with `?` where the registry says the pointer may be null — or the count may be zero. |
+| `VkResult` | `Result`, with `check()` and an `Error` set that is every negative code the registry has. |
+
+Every `sType` is filled in, and `next` is `null`. A member the registry marks
+optional starts at zero or null, and so does every member of a struct that is
+nothing but feature switches — `PhysicalDeviceFeatures` — so `.{}` is the empty
+set. A member you have to decide — a size, a usage, a format — has no default,
+and leaving it out is a compile error. Every declaration carries the registry's
+name in its doc comment.
+
+Types that need a window system's header — `HWND`, `Window`, `wl_display`,
+`ANativeWindow` — are opaque pointers here, so the file compiles everywhere; the
+data file says which, and gives the layout oracle a stand-in for each.
+
+**What the generator refuses.** A struct with a bit-field is an error, naming the
+member: no Zig type has a C bit-field's layout on every target. So is a type
+from a platform header that the wanted list does not describe, two names that
+come out as one, and a command in the wrong tier — the loader dispatches on a
+command's first argument, and the list is checked against that.
+
+### Checking it, three ways
+
+The generated declarations are not trusted; they are measured.
+
+**The layout oracle.** `gen/layout.c` includes the real `vulkan_core.h` and makes
+one number of every struct's size, every alignment, every member's offset. It is
+generated from the same list as the Zig, and `gen/layout.zig` is that list with
+the numbers *Zig* makes. `zig build test` compiles the C with `zig cc`, runs it,
+and compares: 132 structs and unions, 1,187 numbers, on x86-64 Windows. It then
+does the same, without running anything, for 32-bit x86 — where `u64` is only
+4-aligned — and for 32- and 64-bit Android, by reading the table out of the
+assembly `zig cc -S` and `zig build-obj -femit-asm` write. And the test suite
+itself has run on 32-bit Windows, which is where the `__stdcall` difference is.
+
+**The enum oracle.** The same table holds the number of every enumerant, flag bit
+and constant — 1,211 of them — and the same test compares them with the header's.
+
+**The real driver.** `src/real.zig` is a small renderer written against
+`vk.gen` and nothing else. It creates an instance with the validation layer and a
+debug messenger, a device, a host-visible buffer it writes and reads back, an
+image, a view, a sampler, a render pass, a framebuffer, descriptor set layout,
+pool and set, a pipeline layout with a push constant, and a **graphics
+pipeline** from two SPIR-V modules (`src/testdata`, built from the GLSL beside
+them with `glslc`). It records a triangle into a 64×64 image, copies it into a
+buffer, submits, waits on a fence, and checks that the centre pixel is the
+triangle's colour and the corners are the clear colour. **Any validation error or
+warning fails the test.**
+
+The tests skip out loud — and say what is missing — without `zig cc`, the Vulkan
+headers (`VULKAN_SDK`, or `FLUXION_VK_INCLUDE`), a Vulkan library or a device.
+`FLUXION_VERBOSE=1` makes them say what they found.
+
+The stub the other tests run against answers the names in the generated tables
+too, so that all three load through it, and implements two of their commands. It
+does not draw: everything past that is the real driver's test.
 
 ## Everything together
 
@@ -444,6 +599,10 @@ zig build test        # run the test suite
 zig build example     # build and run the demo tour
 zig build examples    # build every example without running one
 zig build docs        # generate API docs into zig-out/docs
+
+zig build gen -Dvk-xml=<path>         # regenerate src/gen from the registry
+zig build gen-check -Dvk-xml=<path>   # fail if src/gen is not what the generator writes
+zig build test -Dvk-xml=<path>        # ...and have the test suite check that, byte for byte
 ```
 
 Any of it cross-compiles with `-Dtarget=`, and `zig build test -Dtarget=` runs
@@ -460,7 +619,10 @@ from library to device table runs on a machine with no GPU at all, including the
 awkward cases: a Vulkan 1.0 loader, a driver with a promoted command under only
 its old name, an instance that refuses to be created.
 
-The handful of tests that do need a driver find one or skip.
+The tests that do need a driver find one or skip: the real-driver test in
+`src/real.zig`, which draws a triangle and reads it back with the validation
+layer watching, and the layout oracle, which needs the Vulkan headers and `zig
+cc` and says so when it does not have them.
 
 The sizes of the structs a driver writes into are pinned too, per ABI: the
 64-bit one, the 32-bit one where `u64` is still eight-aligned (armv7 Android,
@@ -470,6 +632,11 @@ short is a buffer overflow that no test of behaviour would catch.
 ## Requirements
 
 Zig 0.16.0. No system headers, no `vulkan-headers`, and nothing to link.
+
+Regenerating `src/gen` needs the registry, `vk.xml`, from the Vulkan SDK or from
+the Khronos repository. The oracle wants the SDK's headers too, and is happy
+without them. The GLSL under `src/testdata` is built with `glslc`, and the
+SPIR-V is committed beside it.
 
 ## License
 

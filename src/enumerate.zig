@@ -12,6 +12,11 @@
 //! So: one loop, in `collect`, and the six lists a loader needs on top of it.
 //! Each returns memory you own and free.
 //!
+//! The functions that ask an instance or a physical device take `cmds` - any
+//! table that has the commands they call. `commands.Instance` is one, and so is
+//! the generated `gen.commands.Instance`; the two are the same commands with
+//! the same handles.
+//!
 //! On top of that, the two questions anyone actually asks of a list of
 //! extension names:
 //!
@@ -87,11 +92,11 @@ pub fn instanceExtensions(
 /// a hint and not an answer. See `types.PhysicalDeviceProperties.device_type`.
 pub fn physicalDevices(
     allocator: Allocator,
-    cmds: commands.Instance,
+    cmds: anytype,
     instance: types.Instance,
 ) Error![]types.PhysicalDevice {
     const Query = struct {
-        cmds: commands.Instance,
+        cmds: @TypeOf(cmds),
         instance: types.Instance,
         fn call(self: @This(), count: *u32, into: ?[*]types.PhysicalDevice) types.Result {
             return self.cmds.enumeratePhysicalDevices(self.instance, count, into);
@@ -109,12 +114,12 @@ pub fn physicalDevices(
 /// `DeviceCreateInfo.setExtensions` - `VK_KHR_swapchain` above all.
 pub fn deviceExtensions(
     allocator: Allocator,
-    cmds: commands.Instance,
+    cmds: anytype,
     physical_device: types.PhysicalDevice,
     layer: ?[*:0]const u8,
 ) Error![]types.ExtensionProperties {
     const Query = struct {
-        cmds: commands.Instance,
+        cmds: @TypeOf(cmds),
         physical_device: types.PhysicalDevice,
         layer: ?[*:0]const u8,
         fn call(self: @This(), count: *u32, into: ?[*]types.ExtensionProperties) types.Result {
@@ -141,7 +146,7 @@ pub fn deviceExtensions(
 /// fail: the count is fixed for the lifetime of the device.
 pub fn queueFamilies(
     allocator: Allocator,
-    cmds: commands.Instance,
+    cmds: anytype,
     physical_device: types.PhysicalDevice,
 ) Allocator.Error![]types.QueueFamilyProperties {
     var count: u32 = 0;
